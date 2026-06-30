@@ -1,52 +1,50 @@
 mod cpu;
 mod memory;
+mod assembler;
 
-use cpu::{CPU, LOADI, STORE, SUB, JNZ, HLT};
+use cpu::CPU;
 use memory::Memory;
+use assembler::{
+    emit_loadi,
+    emit_mov,
+    emit_add,
+    emit_sub,
+    emit_store,
+    emit_hlt,
+};
 
 fn main() {
     let mut memory = Memory::new(1024);
     let mut cpu = CPU::new();
 
+    let mut pos: u32 = 0;
+
     // =========================
     // プログラム
     // =========================
-    // 0:  LOADI R0, 3      R0 = 3
-    // 6:  LOADI R1, 1      R1 = 1
-    // 12: SUB R0, R1       R0 = R0 - R1
-    // 15: JNZ R0, 12       R0が0でなければ12番地へ戻る
-    // 21: STORE R0, 100    memory[100] = R0
-    // 27: HLT
-
-    // LOADI R0, 3
-    memory.write_u8(0, LOADI);
-    memory.write_u8(1, 0);       // R0
-    memory.write_u32(2, 3);      // value 3
-
-    // LOADI R1, 1
-    memory.write_u8(6, LOADI);
-    memory.write_u8(7, 1);       // R1
-    memory.write_u32(8, 1);      // value 1
-
-    // SUB R0, R1
-    memory.write_u8(12, SUB);
-    memory.write_u8(13, 0);      // R0
-    memory.write_u8(14, 1);      // R1
-
-    // JNZ R0, 12
-    memory.write_u8(15, JNZ);
-    memory.write_u8(16, 0);      // R0
-    memory.write_u32(17, 12);    // jump address
-
-    // STORE R0, 100
-    memory.write_u8(21, STORE);
-    memory.write_u8(22, 0);      // R0
-    memory.write_u32(23, 100);   // address 100
-
+    // LOADI R0, 10
+    // LOADI R1, 3
+    // LOADI R2, 2
+    // MOV R3, R0
+    // ADD R3, R1
+    // SUB R3, R2
+    // STORE R3, 100
     // HLT
-    memory.write_u8(27, HLT);
+
+    emit_loadi(&mut memory, &mut pos, 0, 10);
+    emit_loadi(&mut memory, &mut pos, 1, 3);
+    emit_loadi(&mut memory, &mut pos, 2, 2);
+
+    emit_mov(&mut memory, &mut pos, 3, 0);
+    emit_add(&mut memory, &mut pos, 3, 1);
+    emit_sub(&mut memory, &mut pos, 3, 2);
+
+    emit_store(&mut memory, &mut pos, 3, 100);
+    emit_hlt(&mut memory, &mut pos);
 
     loop {
+        cpu.dump_registers();
+
         let stop = cpu.step(&mut memory);
 
         if stop {
@@ -54,7 +52,7 @@ fn main() {
         }
     }
 
-    println!("R0 = {}", cpu.registers[0]);
-    println!("R1 = {}", cpu.registers[1]);
+    cpu.dump_registers();
+
     println!("memory[100] = {}", memory.read_u32(100));
 }
