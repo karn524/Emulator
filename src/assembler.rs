@@ -1,4 +1,5 @@
-use crate::cpu::{LOADI, STORE, ADD, SUB, MOV, HLT};
+use std::collections::HashMap;
+use crate::cpu::{LOADI, STORE, ADD, SUB, MOV, JMP, JZ, JNZ, HLT};
 use crate::memory::Memory;
 
 // LOADI Rn, value
@@ -61,8 +62,68 @@ pub fn emit_store(memory: &mut Memory, pos: &mut u32, reg: u8, address: u32) {
     *pos += 4;
 }
 
+// JMP address
+pub fn emit_jmp(memory: &mut Memory, pos: &mut u32, address: u32) {
+    memory.write_u8(*pos, JMP);
+    *pos += 1;
+
+    memory.write_u32(*pos, address);
+    *pos += 4;
+}
+
+// JZ Rn, address
+pub fn emit_jz(memory: &mut Memory, pos: &mut u32, reg: u8, address: u32) {
+    memory.write_u8(*pos, JZ);
+    *pos += 1;
+
+    memory.write_u8(*pos, reg);
+    *pos += 1;
+
+    memory.write_u32(*pos, address);
+    *pos += 4;
+}
+
+// JNZ Rn, address
+pub fn emit_jnz(memory: &mut Memory, pos: &mut u32, reg: u8, address: u32) {
+    memory.write_u8(*pos, JNZ);
+    *pos += 1;
+
+    memory.write_u8(*pos, reg);
+    *pos += 1;
+
+    memory.write_u32(*pos, address);
+    *pos += 4;
+}
 // HLT
 pub fn emit_hlt(memory: &mut Memory, pos: &mut u32) {
     memory.write_u8(*pos, HLT);
     *pos += 1;
+}
+
+// 仮に書いておいた32bit値をあとから書き換える
+pub fn patch_u32(memory: &mut Memory, address_pos: u32, value: u32) {
+    memory.write_u32(address_pos, value);
+}
+
+pub struct LabelTable {
+    labels: HashMap<String, u32>,
+}
+
+impl LabelTable {
+    pub fn new() -> Self {
+        LabelTable {
+            labels: HashMap::new(),
+        }
+    }
+
+    pub fn define(&mut self, name: &str, address: u32) {
+        self.labels.insert(name.to_string(), address);
+    }
+
+    pub fn get(&self, name: &str) -> u32 {
+        match self.labels.get(name) {
+            Some(address) => *address,
+            None => panic!("Undefined label: {}", name),
+        }
+    }
 }

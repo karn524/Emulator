@@ -5,12 +5,14 @@ mod assembler;
 use cpu::CPU;
 use memory::Memory;
 use assembler::{
+    LabelTable,
     emit_loadi,
-    emit_mov,
-    emit_add,
     emit_sub,
     emit_store,
+    emit_jmp,
+    emit_jz,
     emit_hlt,
+    patch_u32,
 };
 
 fn main() {
@@ -18,30 +20,60 @@ fn main() {
     let mut cpu = CPU::new();
 
     let mut pos: u32 = 0;
+    let mut labels = LabelTable::new();
 
     // =========================
     // プログラム
     // =========================
-    // LOADI R0, 10
-    // LOADI R1, 3
-    // LOADI R2, 2
-    // MOV R3, R0
-    // ADD R3, R1
-    // SUB R3, R2
-    // STORE R3, 100
+    // LOADI R0, 3
+    // LOADI R1, 1
+    //
+    // loop:
+    // JZ R0, end
+    // SUB R0, R1
+    // JMP loop
+    //
+    // end:
+    // STORE R0, 100
     // HLT
 
-    emit_loadi(&mut memory, &mut pos, 0, 10);
-    emit_loadi(&mut memory, &mut pos, 1, 3);
-    emit_loadi(&mut memory, &mut pos, 2, 2);
+    // LOADI R0, 3
+    emit_loadi(&mut memory, &mut pos, 0, 3);
 
-    emit_mov(&mut memory, &mut pos, 3, 0);
-    emit_add(&mut memory, &mut pos, 3, 1);
-    emit_sub(&mut memory, &mut pos, 3, 2);
+    // LOADI R1, 1
+    emit_loadi(&mut memory, &mut pos, 1, 1);
 
-    emit_store(&mut memory, &mut pos, 3, 100);
+    // loop:
+    labels.define("loop", pos);
+
+    // JZ R0, end
+    // この時点では end の番地がまだ分からないので、仮に 0 を入れる
+    let jz_address_pos = pos + 2;
+    emit_jz(&mut memory, &mut pos, 0, 0);
+
+    // SUB R0, R1
+    emit_sub(&mut memory, &mut pos, 0, 1);
+
+    // JMP loop
+    let loop_address = labels.get("loop");
+    emit_jmp(&mut memory, &mut pos, loop_address);
+
+    // end:
+    labels.define("end", pos);
+
+    // さっき仮に 0 にしていた JZ のジャンプ先を end の番地に書き換える
+    let end_address = labels.get("end");
+    patch_u32(&mut memory, jz_address_pos, end_address);
+
+    // STORE R0, 100
+    emit_store(&mut memory, &mut pos, 0, 100);
+
+    // HLT
     emit_hlt(&mut memory, &mut pos);
 
+    // =========================
+    // CPU実行ループ
+    // =========================
     loop {
         cpu.dump_registers();
 

@@ -1,1 +1,1 @@
-C:\Users\user\OneDrive\ドキュメント\cpu-emulator\target\debug\cpu-emulator.exe: C:\Users\user\OneDrive\ドキュメント\cpu-emulator\src\cpu.rs C:\Users\user\OneDrive\ドキュメント\cpu-emulator\src\main.rs C:\Users\user\OneDrive\ドキュメント\cpu-emulator\src\memory.rs
+C:\Users\user\OneDrive\ドキュメント\cpu-emulator\target\debug\cpu-emulator.exe: C:\Users\user\OneDrive\ドキュメント\cpu-emulator\src\assembler.rs C:\Users\user\OneDrive\ドキュメント\cpu-emulator\src\cpu.rs C:\Users\user\OneDrive\ドキュメント\cpu-emulator\src\main.rs C:\Users\user\OneDrive\ドキュメント\cpu-emulator\src\memory.rs
