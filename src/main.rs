@@ -6,13 +6,14 @@ use emulator::memory::Memory;
 
 use assembler::emit::{
     LabelTable,
+    Patch,
     emit_loadi,
     emit_sub,
     emit_store,
-    emit_jmp,
-    emit_jz,
+    emit_jz_label,
+    emit_jmp_label,
     emit_hlt,
-    patch_u32,
+    resolve_patches,
 };
 
 fn main() {
@@ -21,6 +22,7 @@ fn main() {
 
     let mut pos: u32 = 0;
     let mut labels = LabelTable::new();
+    let mut patches: Vec<Patch> = Vec::new();
 
     // =========================
     // プログラム
@@ -47,23 +49,19 @@ fn main() {
     labels.define("loop", pos);
 
     // JZ R0, end
-    // この時点では end の番地がまだ分からないので、仮に 0 を入れる
-    let jz_address_pos = pos + 2;
-    emit_jz(&mut memory, &mut pos, 0, 0);
+    emit_jz_label(&mut memory, &mut pos, 0, "end", &mut patches);
 
     // SUB R0, R1
     emit_sub(&mut memory, &mut pos, 0, 1);
 
     // JMP loop
-    let loop_address = labels.get("loop");
-    emit_jmp(&mut memory, &mut pos, loop_address);
+    emit_jmp_label(&mut memory, &mut pos, "loop", &mut patches);
 
     // end:
     labels.define("end", pos);
 
     // さっき仮に 0 にしていた JZ のジャンプ先を end の番地に書き換える
-    let end_address = labels.get("end");
-    patch_u32(&mut memory, jz_address_pos, end_address);
+    resolve_patches(&mut memory, &labels, &patches);
 
     // STORE R0, 100
     emit_store(&mut memory, &mut pos, 0, 100);

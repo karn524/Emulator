@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::collections::HashMap;
 use crate::emulator::cpu::{LOADI, STORE, ADD, SUB, MOV, JMP, JZ, JNZ, HLT};
 use crate::emulator::memory::Memory;
@@ -83,6 +85,27 @@ pub fn emit_jz(memory: &mut Memory, pos: &mut u32, reg: u8, address: u32) {
     *pos += 4;
 }
 
+// JMP label
+// label の番地はあとで解決する
+pub fn emit_jmp_label(
+    memory: &mut Memory,
+    pos: &mut u32,
+    label: &str,
+    patches: &mut Vec<Patch>,
+) {
+    memory.write_u8(*pos, JMP);
+    *pos += 1;
+
+    let address_pos = *pos;
+    memory.write_u32(*pos, 0);
+    *pos += 4;
+
+    patches.push(Patch {
+        label: label.to_string(),
+        address_pos,
+    });
+}
+
 // JNZ Rn, address
 pub fn emit_jnz(memory: &mut Memory, pos: &mut u32, reg: u8, address: u32) {
     memory.write_u8(*pos, JNZ);
@@ -107,6 +130,47 @@ pub fn patch_u32(memory: &mut Memory, address_pos: u32, value: u32) {
 
 pub struct LabelTable {
     labels: HashMap<String, u32>,
+}
+
+pub struct Patch {
+    pub label: String,
+    pub address_pos: u32,
+}
+
+// JZ Rn, label
+// label の番地はまだ分からないので、仮に0を書いて、あとで修正する
+pub fn emit_jz_label(
+    memory: &mut Memory,
+    pos: &mut u32,
+    reg: u8,
+    label: &str,
+    patches: &mut Vec<Patch>,
+) {
+    memory.write_u8(*pos, JZ);
+    *pos += 1;
+
+    memory.write_u8(*pos, reg);
+    *pos += 1;
+
+    let address_pos = *pos;
+    memory.write_u32(*pos, 0);
+    *pos += 4;
+
+    patches.push(Patch {
+        label: label.to_string(),
+        address_pos,
+    });
+}
+
+pub fn resolve_patches(
+    memory: &mut Memory,
+    labels: &LabelTable,
+    patches: &[Patch],
+) {
+    for patch in patches {
+        let address = labels.get(&patch.label);
+        memory.write_u32(patch.address_pos, address);
+    }
 }
 
 impl LabelTable {
