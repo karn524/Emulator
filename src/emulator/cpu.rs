@@ -13,17 +13,43 @@ pub const MOV: u8 = 9;     // レジスタ間で値をコピーする
 pub const HLT: u8 = 255;   // 停止
 
 pub struct CPU {
-    pub registers: [u32; 8], // R0〜R7
-    pub pc: u32,             // Program Counter
-    pub ir: u8,              // Instruction Register
+    pub registers: [u32; 8],     // 汎用レジスタ R0〜R7
+
+    pub pc: u32,                 // Program Counter
+    pub ir: u8,                  // Instruction Register
+
+    pub interrupt_register: u32, // 割り込みレジスタ
+
+    pub sp: u32,                 // Stack Pointer
+    pub bp: u32,                 // Base Pointer
+    pub fp: u32,                 // Frame Pointer
+    pub lr: u32,                 // Link Register
+
+    pub carry_flag: bool,        // キャリーフラッグ
+    pub sign_flag: bool,         // サインフラッグ
+    pub zero_flag: bool,         // ゼロフラッグ
+    pub overflow_flag: bool,     // オーバーフローフラッグ
 }
 
 impl CPU {
     pub fn new() -> Self {
         CPU {
             registers: [0; 8],
+
             pc: 0,
             ir: 0,
+
+            interrupt_register: 0,
+
+            sp: 0,
+            bp: 0,
+            fp: 0,
+            lr: 0,
+
+            carry_flag: false,
+            sign_flag: false,
+            zero_flag: false,
+            overflow_flag: false,
         }
     }
 
@@ -31,10 +57,21 @@ impl CPU {
     pub fn dump_registers(&self) {
         println!("PC = {}", self.pc);
         println!("IR = {}", self.ir);
+        println!("INT = {}", self.interrupt_register);
 
         for i in 0..8 {
-            println!("R{} = {}", i, self.registers[i]);
+        println!("R{} = {}", i, self.registers[i]);
         }
+
+        println!("SP = {}", self.sp);
+        println!("BP = {}", self.bp);
+        println!("FP = {}", self.fp);
+        println!("LR = {}", self.lr);
+
+        println!("CF = {}", self.carry_flag);
+        println!("SF = {}", self.sign_flag);
+        println!("ZF = {}", self.zero_flag);
+        println!("OF = {}", self.overflow_flag);
 
         println!("--------------------");
     }
