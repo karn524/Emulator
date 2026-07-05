@@ -1,8 +1,20 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use crate::emulator::cpu::{LOADI, STORE, ADD, SUB, MOV, JMP, JZ, JNZ, HLT};
+use crate::emulator::cpu::{LOAD, LOADI, STORE, ADD, SUB, MOV, JMP, JZ, JNZ, JS, JNS, HLT};
 use crate::emulator::memory::Memory;
+
+// LOAD Rn, address
+pub fn emit_load(memory: &mut Memory, pos: &mut u32, reg: u8, address: u32) {
+    memory.write_u8(*pos, LOAD);
+    *pos += 1;
+
+    memory.write_u8(*pos, reg);
+    *pos += 1;
+
+    memory.write_u32(*pos, address);
+    *pos += 4;
+}
 
 // LOADI Rn, value
 pub fn emit_loadi(memory: &mut Memory, pos: &mut u32, reg: u8, value: u32) {
@@ -74,11 +86,9 @@ pub fn emit_jmp(memory: &mut Memory, pos: &mut u32, address: u32) {
 }
 
 // JZ Rn, address
-pub fn emit_jz(memory: &mut Memory, pos: &mut u32, reg: u8, address: u32) {
+// JZ address
+pub fn emit_jz(memory: &mut Memory, pos: &mut u32, address: u32) {
     memory.write_u8(*pos, JZ);
-    *pos += 1;
-
-    memory.write_u8(*pos, reg);
     *pos += 1;
 
     memory.write_u32(*pos, address);
@@ -106,17 +116,35 @@ pub fn emit_jmp_label(
     });
 }
 
-// JNZ Rn, address
-pub fn emit_jnz(memory: &mut Memory, pos: &mut u32, reg: u8, address: u32) {
+// JNZ address
+pub fn emit_jnz(memory: &mut Memory, pos: &mut u32, address: u32) {
     memory.write_u8(*pos, JNZ);
-    *pos += 1;
-
-    memory.write_u8(*pos, reg);
     *pos += 1;
 
     memory.write_u32(*pos, address);
     *pos += 4;
 }
+
+// JS address
+// sign_flag が true なら address にジャンプする
+pub fn emit_js(memory: &mut Memory, pos: &mut u32, address: u32) {
+    memory.write_u8(*pos, JS);
+    *pos += 1;
+
+    memory.write_u32(*pos, address);
+    *pos += 4;
+}
+
+// JNS address
+// sign_flag が false なら address にジャンプする
+pub fn emit_jns(memory: &mut Memory, pos: &mut u32, address: u32) {
+    memory.write_u8(*pos, JNS);
+    *pos += 1;
+
+    memory.write_u32(*pos, address);
+    *pos += 4;
+}
+
 // HLT
 pub fn emit_hlt(memory: &mut Memory, pos: &mut u32) {
     memory.write_u8(*pos, HLT);
@@ -137,19 +165,15 @@ pub struct Patch {
     pub address_pos: u32,
 }
 
-// JZ Rn, label
-// label の番地はまだ分からないので、仮に0を書いて、あとで修正する
+// JZ label
+// zero_flag が true なら label にジャンプする
 pub fn emit_jz_label(
     memory: &mut Memory,
     pos: &mut u32,
-    reg: u8,
     label: &str,
     patches: &mut Vec<Patch>,
 ) {
     memory.write_u8(*pos, JZ);
-    *pos += 1;
-
-    memory.write_u8(*pos, reg);
     *pos += 1;
 
     let address_pos = *pos;

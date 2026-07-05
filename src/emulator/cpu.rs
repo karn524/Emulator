@@ -10,29 +10,45 @@ pub const JZ: u8 = 6;      // レジスタが0ならジャンプ
 pub const JNZ: u8 = 7;     // レジスタが0でなければジャンプ
 pub const LOADI: u8 = 8;   // 即値をレジスタへ入れる
 pub const MOV: u8 = 9;     // レジスタ間で値をコピーする
+pub const JS: u8 = 10;     // sign_flag が true ならジャンプ
+pub const JNS: u8 = 11;    // sign_flag が false ならジャンプ
 pub const HLT: u8 = 255;   // 停止
 
 pub struct CPU {
-    pub registers: [u32; 8],     // 汎用レジスタ R0〜R7
+    // 汎用レジスタ
+    // R0〜R7：計算・一時保存・メモリ読み書きに使う
+    pub registers: [u32; 8],
 
-    pub pc: u32,                 // Program Counter
-    pub ir: u8,                  // Instruction Register
+    // 命令実行用レジスタ
+    // pc：次に読む命令のアドレス
+    // ir：現在実行中の命令番号
+    pub pc: u32,
+    pub ir: u8,
 
-    pub interrupt_register: u32, // 割り込みレジスタ
+    // 割り込み用レジスタ
+    // Phase 7で使用予定
+    pub interrupt_register: u32,
 
-    pub sp: u32,                 // Stack Pointer
-    pub bp: u32,                 // Base Pointer
-    pub fp: u32,                 // Frame Pointer
-    pub lr: u32,                 // Link Register
+    // スタック・関数呼び出し用レジスタ
+    // sp：スタックの現在位置
+    // bp：ベースポインタ
+    // fp：フレームポインタ
+    // lr：関数呼び出し後に戻るアドレス
+    pub sp: u32,
+    pub bp: u32,
+    pub fp: u32,
+    pub lr: u32,
 
-    pub carry_flag: bool,        // キャリーフラッグ
-    pub sign_flag: bool,         // サインフラッグ
-    pub zero_flag: bool,         // ゼロフラッグ
-    pub overflow_flag: bool,     // オーバーフローフラッグ
+    // フラグレジスタ
+    // Phase 3で本格的に更新処理を入れる
+    pub carry_flag: bool,
+    pub sign_flag: bool,
+    pub zero_flag: bool,
+    pub overflow_flag: bool,
 }
 
 impl CPU {
-    pub fn new() -> Self {
+    pub fn new(memory_size: u32) -> Self {
         CPU {
             registers: [0; 8],
 
@@ -41,9 +57,9 @@ impl CPU {
 
             interrupt_register: 0,
 
-            sp: 0,
-            bp: 0,
-            fp: 0,
+            sp: memory_size,
+            bp: memory_size,
+            fp: memory_size,
             lr: 0,
 
             carry_flag: false,
@@ -99,6 +115,11 @@ impl CPU {
         reg as usize
     }
 
+    fn update_zero_sign_flags(&mut self, value: u32) {
+        self.zero_flag = value == 0;
+        self.sign_flag = (value & 0x8000_0000) != 0;
+    }
+
     // 命令を1つ実行する
     // true  → 停止
     // false → 続行
@@ -115,6 +136,7 @@ impl CPU {
 
                 let reg_index = CPU::check_register(reg);
                 self.registers[reg_index] = memory.read_u32(address);
+                self.update_zero_sign_flags(self.registers[reg_index]);
             }
 
             LOADI => {
@@ -125,6 +147,7 @@ impl CPU {
 
                 let reg_index = CPU::check_register(reg);
                 self.registers[reg_index] = value;
+                self.update_zero_sign_flags(self.registers[reg_index]);
             }
 
             STORE => {
@@ -148,6 +171,7 @@ impl CPU {
                 let src_index = CPU::check_register(src);
 
                 self.registers[dst_index] = self.registers[src_index];
+                self.update_zero_sign_flags(self.registers[dst_index]);
             }
 
             ADD => {
@@ -162,6 +186,8 @@ impl CPU {
 
                 self.registers[dst_index] =
                     self.registers[dst_index].wrapping_add(self.registers[src_index]);
+
+                self.update_zero_sign_flags(self.registers[dst_index]);
             }
 
             SUB => {
@@ -176,6 +202,8 @@ impl CPU {
 
                 self.registers[dst_index] =
                     self.registers[dst_index].wrapping_sub(self.registers[src_index]);
+
+                self.update_zero_sign_flags(self.registers[dst_index]);
             }
 
             JMP => {
@@ -186,29 +214,46 @@ impl CPU {
             }
 
             JZ => {
-                // JZ R0, 30
-                // R0が0なら30番地へジャンプ
-                // [JZ][reg][address u32]
-                let reg = self.fetch_u8(memory);
+                // JZ adress
+                // zero_flag が true ならジャンプ
+                // [JZ][address u32]
                 let address = self.fetch_u32(memory);
 
-                let reg_index = CPU::check_register(reg);
-
-                if self.registers[reg_index] == 0 {
+                if self.zero_flag {
                     self.pc = address;
                 }
             }
 
             JNZ => {
-                // JNZ R0, 12
-                // R0が0でなければ12番地へジャンプ
-                // [JNZ][reg][address u32]
-                let reg = self.fetch_u8(memory);
+                // JNZ adress
+                // zero_flagがfalseならジャンプ
+                // [JNZ][address u32]
                 let address = self.fetch_u32(memory);
 
-                let reg_index = CPU::check_register(reg);
+                if !self.zero_flag {
+                    self.pc = address;
+                }
+            }
 
-                if self.registers[reg_index] != 0 {
+            JS => {
+                // JS address
+                // sign_flag が true ならジャンプ
+                // [JS][address u32]
+                let address = self.fetch_u32(memory);
+
+                if self.sign_flag {
+                    self.pc = address;
+                }
+            }
+        
+
+            JNS => {
+                // JNS address
+                // sign_flag が false ならジャンプ
+                // [JNS][address u32]
+                let address = self.fetch_u32(memory);
+
+                if !self.sign_flag {
                     self.pc = address;
                 }
             }
