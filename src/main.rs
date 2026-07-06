@@ -1,5 +1,6 @@
 mod emulator;
 mod assembler;
+mod compiler;
 
 use emulator::cpu::CPU;
 use emulator::memory::Memory;
@@ -29,8 +30,27 @@ fn main() {
     let mut cpu = CPU::new(memory_size as u32);
 
     let mut pos: u32 = 0;
-    let mut labels = LabelTable::new();
-    let mut patches: Vec<Patch> = Vec::new();
+    compiler::simple_c::compile_simple_c_program(&mut memory, &mut pos);
+
+    // true  → C風コンパイラのテスト
+    // false → 今までのCPU命令テスト
+    let use_compiler_test = true;
+
+    if use_compiler_test {
+
+        // =========================
+        // C風ミニコンパイラのテスト
+        // =========================
+
+        compiler::simple_c::compile_simple_c_program(&mut memory, &mut pos);
+    } else {
+
+        // =========================
+        // 今までのCPU命令テスト
+        // =========================
+
+        let mut labels = LabelTable::new();
+        let mut patches: Vec<Patch> = Vec::new();
 
     // =========================
     // プログラム
@@ -68,13 +88,13 @@ fn main() {
     // end:
     labels.define("end", pos);
 
-    // STORE R0, 100
+    // STORE R0, 400
     // ループが終わったので、R0は0になっているはず
-    emit_store(&mut memory, &mut pos, 0, 100);
+    emit_store(&mut memory, &mut pos, 0, 400);
 
-    // LOAD R2, 100
-    // memory[100] の値を R2 に読み込む
-    emit_load(&mut memory, &mut pos, 2, 100);
+    // LOAD R2, 400
+    // memory[400] の値を R2 に読み込む
+    emit_load(&mut memory, &mut pos, 2, 400);
 
     // LOADI R3, 10
     emit_loadi(&mut memory, &mut pos, 3, 10);
@@ -175,6 +195,7 @@ fn main() {
 
     // HLT
     emit_hlt(&mut memory, &mut pos);
+    }
 
     // =========================
     // CPU実行ループ
@@ -191,6 +212,6 @@ fn main() {
 
     cpu.dump_registers();
 
-    println!("memory[100] = {}", memory.read_u32(100));
     println!("memory[400] = {}", memory.read_u32(400));
+    println!("memory[404] = {}", memory.read_u32(404));
 }
