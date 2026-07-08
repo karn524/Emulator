@@ -12,6 +12,8 @@ pub const LOADI: u8 = 8;   // 即値をレジスタへ入れる
 pub const MOV: u8 = 9;     // レジスタ間で値をコピーする
 pub const JS: u8 = 10;     // sign_flag が true ならジャンプ
 pub const JNS: u8 = 11;    // sign_flag が false ならジャンプ
+pub const PUSH: u8 = 12;   // レジスタの値をスタックに積む
+pub const POP: u8 = 13;    // スタックから値を取り出してレジスタに入れる
 pub const HLT: u8 = 255;   // 停止
 
 pub struct CPU {
@@ -256,6 +258,41 @@ impl CPU {
                 if !self.sign_flag {
                     self.pc = address;
                 }
+            }
+
+            PUSH => {
+                // PUSH R0
+                // R0 の値をスタックに積む
+                // [PUSH][reg]
+                let reg = self.fetch_u8(memory);
+
+                let reg_index = CPU::check_register(reg);
+
+                // スタックは4byte単位で下に伸びる
+                self.sp = self.sp.wrapping_sub(4);
+
+                memory.write_u32(self.sp, self.registers[reg_index]);
+            }
+
+            POP => {
+                // POP R1
+                // スタックから値を取り出して R1 に入れる
+                // [POP][reg]
+                let reg = self.fetch_u8(memory);
+
+                let reg_index = CPU::check_register(reg);
+
+                // スタックが空ならエラー
+                if self.sp as usize >= memory.data.len() {
+                    panic!("Stack underflow: POP from empty stack");
+                }
+
+                self.registers[reg_index] = memory.read_u32(self.sp);
+
+                // 取り出したのでSPを戻す
+                self.sp = self.sp.wrapping_add(4);
+
+                self.update_zero_sign_flags(self.registers[reg_index]);
             }
 
             HLT => {

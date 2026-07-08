@@ -19,6 +19,8 @@ use assembler::emit::{
     emit_jnz,
     emit_js,
     emit_jns,
+    emit_push,
+    emit_pop,
     emit_hlt,
     resolve_patches,
 };
@@ -30,11 +32,10 @@ fn main() {
     let mut cpu = CPU::new(memory_size as u32);
 
     let mut pos: u32 = 0;
-    compiler::simple_c::compile_simple_c_program(&mut memory, &mut pos);
 
     // true  → C風コンパイラのテスト
     // false → 今までのCPU命令テスト
-    let use_compiler_test = true;
+    let use_compiler_test = false;
 
     if use_compiler_test {
 
@@ -192,6 +193,57 @@ fn main() {
 
     // plus:
     emit_loadi(&mut memory, &mut pos, 7, 8888);
+
+    // =========================
+    // PUSH / POP テスト
+    // =========================
+    // R0 = 123
+    // PUSH R0
+    // R0 = 0
+    // POP R1
+    //
+    // 期待結果:
+    // R1 = 123
+    // SP = 1024 に戻る
+
+    emit_loadi(&mut memory, &mut pos, 0, 123);
+
+    // R0 の値をスタックに積む
+    emit_push(&mut memory, &mut pos, 0);
+
+    // R0 を 0 にして、ちゃんとスタックから戻せているか確認する
+    emit_loadi(&mut memory, &mut pos, 0, 0);
+
+    // スタックから取り出して R1 に入れる
+    emit_pop(&mut memory, &mut pos, 1);
+
+    // =========================
+    // 複数 PUSH / POP テスト
+    // =========================
+    // スタックは後入れ先出し
+    //
+    // R0 = 111
+    // R1 = 222
+    // PUSH R0
+    // PUSH R1
+    // POP R2  → R2 = 222
+    // POP R3  → R3 = 111
+
+    emit_loadi(&mut memory, &mut pos, 0, 111);
+    emit_loadi(&mut memory, &mut pos, 1, 222);
+
+    emit_push(&mut memory, &mut pos, 0);
+    emit_push(&mut memory, &mut pos, 1);
+
+    emit_pop(&mut memory, &mut pos, 2);
+    emit_pop(&mut memory, &mut pos, 3);
+
+    // =========================
+    // POP 過剰実行テスト
+    // =========================
+    // すでにスタックが空の状態でさらに POP する
+    // Stack underflow で止まるはず
+    emit_pop(&mut memory, &mut pos, 4);
 
     // HLT
     emit_hlt(&mut memory, &mut pos);

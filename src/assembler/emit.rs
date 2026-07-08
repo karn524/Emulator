@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use crate::emulator::cpu::{LOAD, LOADI, STORE, ADD, SUB, MOV, JMP, JZ, JNZ, JS, JNS, HLT};
+use crate::emulator::cpu::{LOAD, LOADI, STORE, ADD, SUB, MOV, JMP, JZ, JNZ, JS, JNS, PUSH, POP, HLT};
 use crate::emulator::memory::Memory;
 
 // LOAD Rn, address
@@ -143,6 +143,26 @@ pub fn emit_jns(memory: &mut Memory, pos: &mut u32, address: u32) {
 
     memory.write_u32(*pos, address);
     *pos += 4;
+}
+
+// PUSH Rn
+// レジスタの値をスタックに積む
+pub fn emit_push(memory: &mut Memory, pos: &mut u32, reg: u8) {
+    memory.write_u8(*pos, PUSH);
+    *pos += 1;
+
+    memory.write_u8(*pos, reg);
+    *pos += 1;
+}
+
+// POP Rn
+// スタックから値を取り出してレジスタに入れる
+pub fn emit_pop(memory: &mut Memory, pos: &mut u32, reg: u8) {
+    memory.write_u8(*pos, POP);
+    *pos += 1;
+
+    memory.write_u8(*pos, reg);
+    *pos += 1;
 }
 
 // HLT
