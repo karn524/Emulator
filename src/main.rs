@@ -21,6 +21,8 @@ use assembler::emit::{
     emit_jns,
     emit_push,
     emit_pop,
+    emit_call,
+    emit_ret,
     emit_hlt,
     resolve_patches,
 };
@@ -239,11 +241,61 @@ fn main() {
     emit_pop(&mut memory, &mut pos, 3);
 
     // =========================
-    // POP 過剰実行テスト
+    // Phase 5 最終スタックテスト
     // =========================
-    // すでにスタックが空の状態でさらに POP する
-    // Stack underflow で止まるはず
-    emit_pop(&mut memory, &mut pos, 4);
+    // R0 = 111
+    // R1 = 222
+    // PUSH R0
+    // PUSH R1
+    // POP R2
+    // POP R3
+    //
+    // 期待結果:
+    // R2 = 222
+    // R3 = 111
+    // SP = 1024
+
+    emit_loadi(&mut memory, &mut pos, 0, 111);
+    emit_loadi(&mut memory, &mut pos, 1, 222);
+
+    emit_push(&mut memory, &mut pos, 0);
+    emit_push(&mut memory, &mut pos, 1);
+
+    emit_pop(&mut memory, &mut pos, 2);
+    emit_pop(&mut memory, &mut pos, 3); 
+
+    // =========================
+    // CALL / RET テスト
+    // =========================
+    // CALL func
+    // LOADI R7, 777
+    // HLT
+    //
+    // func:
+    // LOADI R0, 123
+    // RET
+
+    // CALL は 5 byte
+    // LOADI R7, 777 は 6 byte
+    // HLT は 1 byte
+    //
+    // func は CALL の後の LOADI と HLT を飛ばした先に置く
+    let func_address = pos + 5 + 6 + 1;
+
+    // CALL func
+    emit_call(&mut memory, &mut pos, func_address);
+
+    // RETで戻ってきた後に実行される
+    emit_loadi(&mut memory, &mut pos, 7, 777);
+
+    // ここで一度止まる
+    emit_hlt(&mut memory, &mut pos);
+
+    // func:
+    emit_loadi(&mut memory, &mut pos, 0, 123);
+
+    // 関数から戻る
+    emit_ret(&mut memory, &mut pos);
 
     // HLT
     emit_hlt(&mut memory, &mut pos);
@@ -254,6 +306,7 @@ fn main() {
     // =========================
     loop {
         cpu.dump_registers();
+        cpu.dump_stack(&memory);
 
         let stop = cpu.step(&mut memory);
 

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use crate::emulator::cpu::{LOAD, LOADI, STORE, ADD, SUB, MOV, JMP, JZ, JNZ, JS, JNS, PUSH, POP, HLT};
+use crate::emulator::cpu::{LOAD, LOADI, STORE, ADD, SUB, MOV, JMP, JZ, JNZ, JS, JNS, PUSH, POP, CALL, RET, HLT};
 use crate::emulator::memory::Memory;
 
 // LOAD Rn, address
@@ -162,6 +162,23 @@ pub fn emit_pop(memory: &mut Memory, pos: &mut u32, reg: u8) {
     *pos += 1;
 
     memory.write_u8(*pos, reg);
+    *pos += 1;
+}
+
+// CALL address
+// 戻り先アドレスをスタックに積んで、address にジャンプする
+pub fn emit_call(memory: &mut Memory, pos: &mut u32, address: u32) {
+    memory.write_u8(*pos, CALL);
+    *pos += 1;
+
+    memory.write_u32(*pos, address);
+    *pos += 4;
+}
+
+// RET
+// スタックから戻り先アドレスを取り出して戻る
+pub fn emit_ret(memory: &mut Memory, pos: &mut u32) {
+    memory.write_u8(*pos, RET);
     *pos += 1;
 }
 

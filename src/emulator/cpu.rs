@@ -14,6 +14,8 @@ pub const JS: u8 = 10;     // sign_flag が true ならジャンプ
 pub const JNS: u8 = 11;    // sign_flag が false ならジャンプ
 pub const PUSH: u8 = 12;   // レジスタの値をスタックに積む
 pub const POP: u8 = 13;    // スタックから値を取り出してレジスタに入れる
+pub const CALL: u8 = 14;   // 関数呼び出し
+pub const RET: u8 = 15;    // 関数から戻る
 pub const HLT: u8 = 255;   // 停止
 
 pub struct CPU {
@@ -92,6 +94,28 @@ impl CPU {
         println!("OF = {}", self.overflow_flag);
 
         println!("--------------------");
+    }
+
+    // スタックの状態を表示する
+    pub fn dump_stack(&self, memory: &Memory) {
+        println!("===== STACK =====");
+        println!("SP = {}", self.sp);
+
+        let memory_size = memory.data.len() as u32;
+
+        if self.sp >= memory_size {
+            println!("stack is empty");
+        } else {
+            let mut address = self.sp;
+
+            while address < memory_size {
+                let value = memory.read_u32(address);
+                println!("memory[{}] = {}", address, value);
+                address += 4;
+            }
+        }
+
+        println!("=================");
     }
 
     // 1byte読む
@@ -268,10 +292,23 @@ impl CPU {
 
                 let reg_index = CPU::check_register(reg);
 
+                //スタックがこれ以上に伸びられないならエラー
+                if self.sp < 4 {
+                    panic!("Stack overflow: PUSH exceed stak area");
+                }
+
                 // スタックは4byte単位で下に伸びる
                 self.sp = self.sp.wrapping_sub(4);
 
-                memory.write_u32(self.sp, self.registers[reg_index]);
+                let value = self.registers[reg_index];
+                memory.write_u32(self.sp, value);
+
+                println!(
+                    "PUSH R{} value={} to memory[{}]",
+                    reg,
+                    value,
+                    self.sp
+                );
             }
 
             POP => {
@@ -287,12 +324,74 @@ impl CPU {
                     panic!("Stack underflow: POP from empty stack");
                 }
 
-                self.registers[reg_index] = memory.read_u32(self.sp);
+                let value = memory.read_u32(self.sp);
+                self.registers[reg_index] = value;
+
+                println!(
+                    "POP R{} value={} from memory[{}]",
+                    reg,
+                    value,
+                    self.sp
+                );
 
                 // 取り出したのでSPを戻す
                 self.sp = self.sp.wrapping_add(4);
 
                 self.update_zero_sign_flags(self.registers[reg_index]);
+            }
+
+            CALL => {
+                // CALL address
+                // 現在のPCを戻り先としてスタックに積み、
+                // address にジャンプする
+                // [CALL][address u32]
+
+                let address = self.fetch_u32(memory);
+
+                // CALL命令を読み終わった時点のPCが戻り先
+                let return_address = self.pc;
+
+                // スタックがこれ以上下に伸びられないならエラー
+                if self.sp < 4 {
+                    panic!("Stack overflow: CALL cannot push return address");
+                }
+
+                // 戻り先アドレスをスタックに積む
+                self.sp = self.sp.wrapping_sub(4);
+                memory.write_u32(self.sp, return_address);
+
+                    println!(
+                        "CALL address={} return_address={} pushed to memory[{}]",
+                        address,
+                        return_address,
+                        self.sp
+                        );
+
+                // 関数の場所へジャンプ
+                self.pc = address;
+            }
+
+            RET => {
+                // RET
+                // スタックから戻り先アドレスを取り出して戻る
+                // [RET]
+
+                // スタックが空ならエラー
+                if self.sp as usize >= memory.data.len() {
+                    panic!("Stack underflow: RET without return address");
+                }
+
+                let return_address = memory.read_u32(self.sp);
+
+                println!(
+                    "RET return_address={} from memory[{}]",
+                    return_address,
+                    self.sp
+                );
+
+                self.sp = self.sp.wrapping_add(4);
+
+                self.pc = return_address;
             }
 
             HLT => {
