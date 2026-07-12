@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use crate::emulator::cpu::{LOAD, LOADI, STORE, ADD, SUB, MOV, JMP, JZ, JNZ, JS, JNS, PUSH, POP, CALL, RET, HLT};
+use crate::emulator::cpu::{LOAD, LOADI, STORE, ADD, SUB, MOV, JMP, JZ, JNZ, JS, JNS, PUSH, POP, CALL, RET, INT, IRET, HLT};
 use crate::emulator::memory::Memory;
 
 // LOAD Rn, address
@@ -182,6 +182,20 @@ pub fn emit_ret(memory: &mut Memory, pos: &mut u32) {
     *pos += 1;
 }
 
+// INT
+// interrupt_register に設定された割り込み処理へジャンプする
+pub fn emit_int(memory: &mut Memory, pos: &mut u32) {
+    memory.write_u8(*pos, INT);
+    *pos += 1;
+}
+
+// IRET
+// 割り込み処理から戻る
+pub fn emit_iret(memory: &mut Memory, pos: &mut u32) {
+    memory.write_u8(*pos, IRET);
+    *pos += 1;
+}
+
 // HLT
 pub fn emit_hlt(memory: &mut Memory, pos: &mut u32) {
     memory.write_u8(*pos, HLT);
@@ -231,6 +245,19 @@ pub fn resolve_patches(
     for patch in patches {
         let address = labels.get(&patch.label);
         memory.write_u32(patch.address_pos, address);
+    }
+}
+
+pub fn assemble_source(_memory: &mut Memory, _pos: &mut u32, source: &str) {
+    for line in source.lines() {
+        let line = line.trim();
+
+        // 空行は無視する
+        if line.is_empty() {
+            continue;
+        }
+
+        println!("assemble line: {}", line);
     }
 }
 

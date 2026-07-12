@@ -16,6 +16,8 @@ pub const PUSH: u8 = 12;   // レジスタの値をスタックに積む
 pub const POP: u8 = 13;    // スタックから値を取り出してレジスタに入れる
 pub const CALL: u8 = 14;   // 関数呼び出し
 pub const RET: u8 = 15;    // 関数から戻る
+pub const INT: u8 = 16;    // 割り込み処理へ移動する
+pub const IRET: u8 = 17;   // 割り込み処理から戻る
 pub const HLT: u8 = 255;   // 停止
 
 pub struct CPU {
@@ -210,10 +212,18 @@ impl CPU {
                 let dst_index = CPU::check_register(dst);
                 let src_index = CPU::check_register(src);
 
-                self.registers[dst_index] =
-                    self.registers[dst_index].wrapping_add(self.registers[src_index]);
+                let a = self.registers[dst_index];
+                let b = self.registers[src_index];
+
+                let result = a.wrapping_add(b);
+
+                self.carry_flag = result < a;
+
+                self.registers[dst_index] = result;
 
                 self.update_zero_sign_flags(self.registers[dst_index]);
+
+                // overflow_flagはPhase 12で実装予定
             }
 
             SUB => {
@@ -226,10 +236,20 @@ impl CPU {
                 let dst_index = CPU::check_register(dst);
                 let src_index = CPU::check_register(src);
 
-                self.registers[dst_index] =
-                    self.registers[dst_index].wrapping_sub(self.registers[src_index]);
+                let a = self.registers[dst_index];
+                let b = self.registers[src_index];
+
+                let result = a.wrapping_sub(b);
+
+                // 符号なし減算で借りが発生した場合、carry_flag = true
+                // 例: 0 - 1 は u32 では 4294967295 になるので、a < b になる
+                self.carry_flag = a < b;
+
+                self.registers[dst_index] = result;
 
                 self.update_zero_sign_flags(self.registers[dst_index]);
+
+                // overflow_flag は Phase 12 で実装予定
             }
 
             JMP => {
@@ -385,6 +405,56 @@ impl CPU {
 
                 println!(
                     "RET return_address={} from memory[{}]",
+                    return_address,
+                    self.sp
+                );
+
+                self.sp = self.sp.wrapping_add(4);
+
+                self.pc = return_address;
+            }
+
+            INT => {
+                // INT
+                // interrupt_register に設定された割り込み処理へジャンプする
+                // [INT]
+
+                let return_address = self.pc;
+
+                if self.interrupt_register == 0 {
+                    panic!("Interrupt handler is not set");
+                }
+
+                if self.sp < 4 {
+                    panic!("Stack overflow: INT cannot push return address");
+                }
+
+                self.sp = self.sp.wrapping_sub(4);
+                memory.write_u32(self.sp, return_address);
+
+                println!(
+                    "INT handler={} return_address={} pushed to memory[{}]",
+                    self.interrupt_register,
+                    return_address,
+                    self.sp
+                );
+
+                self.pc = self.interrupt_register;
+            }
+
+            IRET => {
+                // IRET
+                // 割り込み処理から戻る
+                // [IRET]
+
+                if self.sp as usize >= memory.data.len() {
+                    panic!("Stack underflow: IRET without return address");
+                }
+
+                let return_address = memory.read_u32(self.sp);
+
+                println!(
+                    "IRET return_address={} from memory[{}]",
                     return_address,
                     self.sp
                 );
