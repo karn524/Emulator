@@ -45,14 +45,35 @@ fn main() {
 
     if use_compiler_test {
         compiler::simple_c::compile_simple_c_program(&mut memory, &mut pos);
-    } else if use_assembler_text_text {
+    } else if use_assembler_text_test {
             let source = "
-        LOADI R0, 10
-        LOADI R1, 1
-        ADD R0, R1
-        HLT
-        ";
-            assemble_source(&mut memory, &mut pos, source);
+            // Phase 9 最終確認
+            // R0を3から0まで減らして、memory[400]に保存する
+
+            LOADI R0, 3
+            LOADI R1, 1
+
+            loop:
+            JZ end       // R0が0ならendへ
+            SUB R0, R1   // R0 = R0 - 1
+            JMP loop     // loopへ戻る
+
+            end:
+            STORE R0, 400
+            HLT
+            ";
+            let mut labels = LabelTable::new();
+            let mut patches: Vec<Patch> = Vec::new();
+
+            assemble_source(
+                &mut memory,
+                &mut pos,
+                source,
+                &mut labels,
+                &mut patches,
+            );
+
+            resolve_patches(&mut memory, &labels, &patches);
     } else {
         
         let use_carry_test = true;

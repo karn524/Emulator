@@ -248,16 +248,385 @@ pub fn resolve_patches(
     }
 }
 
-pub fn assemble_source(_memory: &mut Memory, _pos: &mut u32, source: &str) {
+fn parse_register(text: &str) -> u8 {
+    let text = text.trim();
+
+    if !text.starts_with("R") {
+        panic!("Invalid register format: {}", text);
+    }
+
+    let number_text = &text[1..];
+
+    let reg: u8 = number_text
+        .parse()
+        .expect("Invalid register number");
+
+    if reg >= 8 {
+        panic!("Invalid register: R{}", reg);
+    }
+
+    reg
+}
+
+pub fn assemble_source(
+    memory: &mut Memory,
+    pos: &mut u32,
+    source: &str,
+    labels: &mut LabelTable,
+    patches: &mut Vec<Patch>,
+) {
+    //let _ = patches;
+
     for line in source.lines() {
-        let line = line.trim();
+        // // 以降はコメントとして消す
+        let line = line.split("//").next().unwrap().trim();
 
         // 空行は無視する
         if line.is_empty() {
             continue;
         }
 
+        // ラベル行を判定する
+        if line.ends_with(":") {
+            let label_name = line.trim_end_matches(":");
+
+            println!("label found: {} at address {}", label_name, *pos);
+
+            labels.define(label_name, *pos);
+
+            continue;
+        }
+
         println!("assemble line: {}", line);
+
+        // 最初の空白で命令名と引数部分に分ける
+        let parts: Vec<&str> = line.splitn(2, ' ').collect();
+
+        let instruction = parts[0];
+
+        if instruction == "HLT" {
+            emit_hlt(memory, pos);
+            continue;
+        }
+
+        if instruction == "RET" {
+            emit_ret(memory, pos);
+            continue;
+        }
+
+        if instruction == "INT" {
+            emit_int(memory, pos);
+            continue;
+        }
+
+        if instruction == "IRET" {
+            emit_iret(memory, pos);
+            continue;
+        }
+
+        if parts.len() < 2 {
+            panic!("Missing operands: {}", line);
+        }
+
+        let operands_text = parts[1];
+
+        let operands: Vec<&str> = operands_text
+            .split(',')
+            .map(|x| x.trim())
+            .collect();
+
+        match instruction {
+            "LOADI" => {
+                if operands.len() != 2 {
+                    panic!("Invalid LOADI format: {}", line);
+                }
+
+                let reg = parse_register(operands[0]);
+                let value: u32 = operands[1]
+                    .parse()
+                    .expect("Invalid LOADI value");
+
+                emit_loadi(memory, pos, reg, value);
+            }
+
+            "ADD" => {
+                if operands.len() != 2 {
+                    panic!("Invalid ADD format: {}", line);
+                }
+
+                let dst = parse_register(operands[0]);
+                let src = parse_register(operands[1]);
+
+                emit_add(memory, pos, dst, src);
+            }
+
+            "SUB" => {
+                if operands.len() != 2 {
+                    panic!("Invalid SUB format: {}", line);
+                }
+
+                let dst = parse_register(operands[0]);
+                let src = parse_register(operands[1]);
+
+                emit_sub(memory, pos, dst, src);
+            }
+
+            "MOV" => {
+                if operands.len() != 2 {
+                    panic!("Invalid MOV format: {}", line);
+                }
+
+                let dst = parse_register(operands[0]);
+                let src = parse_register(operands[1]);
+
+                emit_mov(memory, pos, dst, src);
+            }
+
+            "STORE" => {
+                if operands.len() != 2 {
+                    panic!("Invalid STORE format: {}", line);
+                }
+
+                let reg = parse_register(operands[0]);
+
+                let address: u32 = operands[1]
+                    .parse()
+                    .expect("Invalid STORE address");
+
+                emit_store(memory, pos, reg, address);
+            }
+
+            "LOAD" => {
+                if operands.len() != 2 {
+                    panic!("Invalid LOAD format: {}", line);
+                }
+
+                let reg = parse_register(operands[0]);
+
+                let address: u32 = operands[1]
+                    .parse()
+                    .expect("Invalid LOAD address");
+
+                emit_load(memory, pos, reg, address);
+            }
+
+            "PUSH" => {
+                if operands.len() != 1 {
+                    panic!("Invalid PUSH format: {}", line);
+                }
+
+                let reg = parse_register(operands[0]);
+
+                emit_push(memory, pos, reg);
+            }
+
+            "POP" => {
+                if operands.len() != 1 {
+                    panic!("Invalid POP format: {}", line);
+                }
+
+                let reg = parse_register(operands[0]);
+
+                emit_pop(memory, pos, reg);
+            }
+
+            "RET" => {
+                if operands.len() != 0 {
+                    panic!("Invalid RET format: {}", line);
+                }
+
+                emit_ret(memory, pos);
+            }
+
+            "INT" => {
+                if operands.len() != 0 {
+                    panic!("Invalid INT format: {}", line);
+                }
+
+                emit_int(memory, pos);
+            }
+
+            "IRET" => {
+                if operands.len() != 0 {
+                    panic!("Invalid IRET format: {}", line);
+                }
+
+                emit_iret(memory, pos);
+            }
+
+            "CALL" => {
+                if operands.len() != 1 {
+                    panic!("Invalid CALL format: {}", line);
+                }
+
+                let target = operands[0];
+
+                // CALL 12 のように数値なら、そのままemitする
+                if let Ok(address) = target.parse::<u32>() {
+                    emit_call(memory, pos, address);
+                } else {
+                    // CALL func のようにラベルなら、あとで解決する
+
+                    // CALL命令を書き込む
+                    memory.write_u8(*pos, CALL);
+                    *pos += 1;
+
+                    // アドレスを書き込む場所を保存する
+                    let address_pos = *pos;
+
+                    // いったん0を書いておく
+                    memory.write_u32(*pos, 0);
+                    *pos += 4;
+
+                    // あとで label の実アドレスで書き換える
+                    patches.push(Patch {
+                        label: target.to_string(),
+                        address_pos,
+                    });
+
+                    println!("CALL label patch: {} at address_pos {}", target, address_pos);
+                }
+            }
+
+            "JMP" => {
+                if operands.len() != 1 {
+                    panic!("Invalid JMP format: {}", line);
+                }
+
+                let target = operands[0];
+
+                if let Ok(address) = target.parse::<u32>() {
+                    emit_jmp(memory, pos, address);
+                } else {
+                    memory.write_u8(*pos, JMP);
+                    *pos += 1;
+
+                    let address_pos = *pos;
+
+                    memory.write_u32(*pos, 0);
+                    *pos += 4;
+
+                    patches.push(Patch {
+                        label: target.to_string(),
+                        address_pos,
+                    });
+
+                    println!("JMP label patch: {} at address_pos {}", target, address_pos);
+                }
+            }
+
+            "JZ" => {
+                if operands.len() != 1 {
+                    panic!("Invalid JZ format: {}", line);
+                }
+
+                let target = operands[0];
+
+                if let Ok(address) = target.parse::<u32>() {
+                    emit_jz(memory, pos, address);
+                } else {
+                    memory.write_u8(*pos, JZ);
+                    *pos += 1;
+
+                    let address_pos = *pos;
+
+                    memory.write_u32(*pos, 0);
+                    *pos += 4;
+
+                    patches.push(Patch {
+                        label: target.to_string(),
+                        address_pos,
+                    });
+
+                    println!("JZ label patch: {} at address_pos {}", target, address_pos);
+                }
+            }
+
+            "JNZ" => {
+                if operands.len() != 1 {
+                    panic!("Invalid JNZ format: {}", line);
+                }
+
+                let target = operands[0];
+
+                if let Ok(address) = target.parse::<u32>() {
+                    emit_jnz(memory, pos, address);
+                } else {
+                    memory.write_u8(*pos, JNZ);
+                    *pos += 1;
+
+                    let address_pos = *pos;
+
+                    memory.write_u32(*pos, 0);
+                    *pos += 4;
+
+                    patches.push(Patch {
+                        label: target.to_string(),
+                        address_pos,
+                });
+
+                    println!("JNZ label patch: {} at address_pos {}", target, address_pos);
+                }
+            }
+
+            "JS" => {
+                if operands.len() != 1 {
+                    panic!("Invalid JS format: {}", line);
+                }
+
+                let target = operands[0];
+
+                if let Ok(address) = target.parse::<u32>() {
+                    emit_js(memory, pos, address);
+                } else {
+                    memory.write_u8(*pos, JS);
+                    *pos += 1;
+
+                    let address_pos = *pos;
+
+                    memory.write_u32(*pos, 0);
+                    *pos += 4;
+
+                    patches.push(Patch {
+                        label: target.to_string(),
+                        address_pos,
+                    });
+
+                    println!("JS label patch: {} at address_pos {}", target, address_pos);
+                }
+            }   
+
+            "JNS" => {
+                if operands.len() != 1 {
+                    panic!("Invalid JNS format: {}", line);
+                }
+
+                let target = operands[0];
+
+                if let Ok(address) = target.parse::<u32>() {
+                    emit_jns(memory, pos, address);
+                } else {
+                    memory.write_u8(*pos, JNS);
+                    *pos += 1;
+
+                    let address_pos = *pos;
+
+                    memory.write_u32(*pos, 0);
+                    *pos += 4;
+
+                    patches.push(Patch {
+                         label: target.to_string(),
+                         address_pos,
+                    });
+
+                    println!("JNS label patch: {} at address_pos {}", target, address_pos);
+                }
+            }
+
+            _ => {
+                panic!("Unknown assembly instruction: {}", instruction);
+            }
+        }
     }
 }
 
