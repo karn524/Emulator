@@ -25,6 +25,8 @@ use assembler::emit::{
     emit_ret,
     emit_int,
     emit_iret,
+    emit_enter,
+    emit_leave,
     emit_hlt,
     assemble_source,
     resolve_patches,
@@ -44,24 +46,45 @@ fn main() {
     let use_assembler_text_test = true;
 
     if use_compiler_test {
-        compiler::simple_c::compile_simple_c_program(&mut memory, &mut pos);
+        let source_c = "
+    int a;
+    int b;
+    a = 3;
+    b = 1;
+    a = a + b;
+    a = a - b;
+    store a, 400;
+    ";
+
+        let asm_source = compiler::simple_c::compile_to_assembly(source_c);
+
+        println!("generated assembly:");
+        println!("{}", asm_source);
+
+        let mut labels = LabelTable::new();
+        let mut patches: Vec<Patch> = Vec::new();
+
+        assemble_source(
+            &mut memory,
+            &mut pos,
+            &asm_source,
+            &mut labels,
+            &mut patches,
+        );
+
+        resolve_patches(&mut memory, &labels, &patches);
     } else if use_assembler_text_test {
             let source = "
-            // Phase 9 最終確認
-            // R0を3から0まで減らして、memory[400]に保存する
+        CALL func
+        LOADI R7, 777
+        HLT
 
-            LOADI R0, 3
-            LOADI R1, 1
-
-            loop:
-            JZ end       // R0が0ならendへ
-            SUB R0, R1   // R0 = R0 - 1
-            JMP loop     // loopへ戻る
-
-            end:
-            STORE R0, 400
-            HLT
-            ";
+        func:
+        ENTER
+        LOADI R0, 123
+        LEAVE
+        RET
+        ";
             let mut labels = LabelTable::new();
             let mut patches: Vec<Patch> = Vec::new();
 

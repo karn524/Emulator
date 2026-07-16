@@ -18,6 +18,8 @@ pub const CALL: u8 = 14;   // 関数呼び出し
 pub const RET: u8 = 15;    // 関数から戻る
 pub const INT: u8 = 16;    // 割り込み処理へ移動する
 pub const IRET: u8 = 17;   // 割り込み処理から戻る
+pub const ENTER: u8 = 18;  // 
+pub const LEAVE: u8 = 19;  //
 pub const HLT: u8 = 255;   // 停止
 
 pub struct CPU {
@@ -462,6 +464,34 @@ impl CPU {
                 self.sp = self.sp.wrapping_add(4);
 
                 self.pc = return_address;
+            }
+            ENTER => {
+                // 古いBPをスタックに保存する
+                if self.sp < 4 {
+                    panic!("Stack overflow on ENTER");
+                }
+
+                self.sp -= 4;
+                memory.write_u32(self.sp, self.bp);
+
+                // 現在のSPを新しいBPにする
+                self.bp = self.sp;
+
+                // ローカル変数用に8バイト確保する
+                if self.sp < 8 {
+                    panic!("Stack overflow on ENTER local area");
+                }
+
+                self.sp -= 8;
+            }
+
+            LEAVE => {
+                // SPを現在のBPの位置に戻す
+                self.sp = self.bp;
+
+                // 古いBPをスタックから復元する
+                self.bp = memory.read_u32(self.sp);
+                self.sp += 4;
             }
 
             HLT => {

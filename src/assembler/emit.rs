@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use crate::emulator::cpu::{LOAD, LOADI, STORE, ADD, SUB, MOV, JMP, JZ, JNZ, JS, JNS, PUSH, POP, CALL, RET, INT, IRET, HLT};
+use crate::emulator::cpu::{LOAD, LOADI, STORE, ADD, SUB, MOV, JMP, JZ, JNZ, JS, JNS, PUSH, POP, CALL, RET, INT, IRET, ENTER, LEAVE, HLT};
 use crate::emulator::memory::Memory;
 
 // LOAD Rn, address
@@ -196,6 +196,18 @@ pub fn emit_iret(memory: &mut Memory, pos: &mut u32) {
     *pos += 1;
 }
 
+// ENTER
+pub fn emit_enter(memory: &mut Memory, pos: &mut u32) {
+    memory.write_u8(*pos, ENTER);
+    *pos += 1;
+}
+
+// LEAVE
+pub fn emit_leave(memory: &mut Memory, pos: &mut u32) {
+    memory.write_u8(*pos, LEAVE);
+    *pos += 1;
+}
+
 // HLT
 pub fn emit_hlt(memory: &mut Memory, pos: &mut u32) {
     memory.write_u8(*pos, HLT);
@@ -323,6 +335,15 @@ pub fn assemble_source(
             emit_iret(memory, pos);
             continue;
         }
+
+        if instruction == "ENTER" {
+            emit_enter(memory, pos);
+            continue;
+        }
+        if instruction == "LEAVE" {
+            emit_leave(memory, pos);
+            continue;
+}
 
         if parts.len() < 2 {
             panic!("Missing operands: {}", line);
