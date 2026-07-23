@@ -37,6 +37,603 @@ fn get_register(
     }
 }
 
+// 1行の前処理をする
+// 前後の空白を消す
+// 空行は空文字として返す
+fn preprocess_line(line: &str) -> String {
+    line.trim().to_string()
+}
+
+// int a;
+// int b;
+// のような変数宣言を処理する
+// 処理できた場合は true を返す
+// 処理できない場合は false を返す
+fn compile_variable_declaration(
+    line: &str,
+    variables: &mut HashMap<String, u8>,
+) -> bool {
+    if !line.starts_with("int ") {
+        return false;
+    }
+
+    let name = line
+        .trim_start_matches("int ")
+        .trim_end_matches(";")
+        .trim();
+
+    declare_variable(variables, name);
+
+    let reg = get_register(variables, name);
+
+    println!("declare variable for assembly: {} -> R{}", name, reg);
+
+    true
+}
+
+// label loop;
+// label end;
+// のようなラベル定義をアセンブリに変換する
+// 処理できた場合は true を返す
+// 処理できない場合は false を返す
+fn compile_label_statement(
+    line: &str,
+    assembly: &mut String,
+) -> bool {
+    if !line.starts_with("label ") {
+        return false;
+    }
+
+    let label_name = line
+        .trim_start_matches("label ")
+        .trim_end_matches(";")
+        .trim();
+
+    assembly.push_str(&format!("{}:\n", label_name));
+
+    println!("generate assembly label: {}:", label_name);
+
+    true
+}
+
+// call func;
+// のような関数呼び出しをアセンブリに変換する
+// 処理できた場合は true を返す
+// 処理できない場合は false を返す
+fn compile_call_statement(
+    line: &str,
+    assembly: &mut String,
+) -> bool {
+    if !line.starts_with("call ") {
+        return false;
+    }
+
+    let label_name = line
+        .trim_start_matches("call ")
+        .trim_end_matches(";")
+        .trim();
+
+    assembly.push_str(&format!("CALL {}\n", label_name));
+
+    println!("generate assembly: CALL {}", label_name);
+
+    true
+}
+
+// ret;
+// enter;
+// leave;
+// interrupt;
+// iret;
+// のような引数なし命令をアセンブリに変換するための共通関数
+fn compile_no_argument_statement(
+    line: &str,
+    keyword: &str,
+    instruction: &str,
+    assembly: &mut String,
+) -> bool {
+    let expected = format!("{};", keyword);
+
+    if line != expected {
+        return false;
+    }
+
+    assembly.push_str(&format!("{}\n", instruction));
+
+    println!("generate assembly: {}", instruction);
+
+    true
+}
+
+// jump loop;
+// のような無条件ジャンプをアセンブリに変換する
+// 処理できた場合は true を返す
+// 処理できない場合は false を返す
+fn compile_jump_statement(
+    line: &str,
+    assembly: &mut String,
+) -> bool {
+    if !line.starts_with("jump ") {
+        return false;
+    }
+
+    let label_name = line
+        .trim_start_matches("jump ")
+        .trim_end_matches(";")
+        .trim();
+
+    assembly.push_str(&format!("JMP {}\n", label_name));
+
+    println!("generate assembly: JMP {}", label_name);
+
+    true
+}
+
+// jz end;
+// jnz loop;
+// js minus;
+// jns plus;
+// のような条件ジャンプをアセンブリに変換するための共通関数
+fn compile_conditional_jump_statement(
+    line: &str,
+    keyword: &str,
+    instruction: &str,
+    assembly: &mut String,
+) -> bool {
+    let prefix = format!("{} ", keyword);
+
+    if !line.starts_with(&prefix) {
+        return false;
+    }
+
+    let label_name = line
+        .trim_start_matches(&prefix)
+        .trim_end_matches(";")
+        .trim();
+
+    assembly.push_str(&format!("{} {}\n", instruction, label_name));
+
+    println!("generate assembly: {} {}", instruction, label_name);
+
+    true
+}
+
+// ifz end;
+// のような簡易if文を JZ に変換する
+// 処理できた場合は true を返す
+// 処理できない場合は false を返す
+fn compile_ifz_statement(
+    line: &str,
+    assembly: &mut String,
+) -> bool {
+    if !line.starts_with("ifz ") {
+        return false;
+    }
+
+    let label_name = line
+        .trim_start_matches("ifz ")
+        .trim_end_matches(";")
+        .trim();
+
+    assembly.push_str(&format!("JZ {}\n", label_name));
+
+    println!("generate assembly: JZ {}", label_name);
+
+    true
+}
+
+// ifnz loop;
+// のような簡易if文を JNZ に変換する
+// 処理できた場合は true を返す
+// 処理できない場合は false を返す
+fn compile_ifnz_statement(
+    line: &str,
+    assembly: &mut String,
+) -> bool {
+    if !line.starts_with("ifnz ") {
+        return false;
+    }
+
+    let label_name = line
+        .trim_start_matches("ifnz ")
+        .trim_end_matches(";")
+        .trim();
+
+    assembly.push_str(&format!("JNZ {}\n", label_name));
+
+    println!("generate assembly: JNZ {}", label_name);
+
+    true
+}
+
+// ifs minus;
+// のような簡易if文を JS に変換する
+// 処理できた場合は true を返す
+// 処理できない場合は false を返す
+fn compile_ifs_statement(
+    line: &str,
+    assembly: &mut String,
+) -> bool {
+    if !line.starts_with("ifs ") {
+        return false;
+    }
+
+    let label_name = line
+        .trim_start_matches("ifs ")
+        .trim_end_matches(";")
+        .trim();
+
+    assembly.push_str(&format!("JS {}\n", label_name));
+
+    println!("generate assembly: JS {}", label_name);
+
+    true
+}
+
+// ifns plus;
+// のような簡易if文を JNS に変換する
+// 処理できた場合は true を返す
+// 処理できない場合は false を返す
+fn compile_ifns_statement(
+    line: &str,
+    assembly: &mut String,
+) -> bool {
+    if !line.starts_with("ifns ") {
+        return false;
+    }
+
+    let label_name = line
+        .trim_start_matches("ifns ")
+        .trim_end_matches(";")
+        .trim();
+
+    assembly.push_str(&format!("JNS {}\n", label_name));
+
+    println!("generate assembly: JNS {}", label_name);
+
+    true
+}
+
+// a = 3;
+// b = 1;
+// のような数値代入をアセンブリに変換する
+// 処理できた場合は true を返す
+// 処理できない場合は false を返す
+fn compile_number_assignment(
+    line: &str,
+    variables: &HashMap<String, u8>,
+    assembly: &mut String,
+) -> bool {
+    if !(line.contains("=") && !line.contains("+") && !line.contains("-")) {
+        return false;
+    }
+
+    let line_without_semicolon = line.trim_end_matches(";");
+
+    let parts: Vec<&str> = line_without_semicolon.split("=").collect();
+
+    if parts.len() != 2 {
+        panic!("Invalid assignment: {}", line);
+    }
+
+    let name = parts[0].trim();
+
+    let value: u32 = parts[1]
+        .trim()
+        .parse()
+        .expect("Invalid number");
+
+    let reg = get_register(variables, name);
+
+    assembly.push_str(&format!("LOADI R{}, {}\n", reg, value));
+
+    println!("generate assembly: LOADI R{}, {}", reg, value);
+
+    true
+}
+
+// a = a + b;
+// のような加算をアセンブリに変換する
+// 処理できた場合は true を返す
+// 処理できない場合は false を返す
+fn compile_add_expression(
+    line: &str,
+    variables: &HashMap<String, u8>,
+    assembly: &mut String,
+) -> bool {
+    if !(line.contains("=") && line.contains("+")) {
+        return false;
+    }
+
+    let line_without_semicolon = line.trim_end_matches(";");
+
+    let parts: Vec<&str> = line_without_semicolon.split("=").collect();
+
+    if parts.len() != 2 {
+        panic!("Invalid add expression: {}", line);
+    }
+
+    let dst_name = parts[0].trim();
+
+    let right_side = parts[1].trim();
+    let add_parts: Vec<&str> = right_side.split("+").collect();
+
+    if add_parts.len() != 2 {
+        panic!("Invalid add expression: {}", line);
+    }
+
+    let left_name = add_parts[0].trim();
+    let src_name = add_parts[1].trim();
+
+    if dst_name != left_name {
+        panic!("Only a = a + b style is supported: {}", line);
+    }
+
+    let dst = get_register(variables, dst_name);
+    let src = get_register(variables, src_name);
+
+    assembly.push_str(&format!("ADD R{}, R{}\n", dst, src));
+
+    println!("generate assembly: ADD R{}, R{}", dst, src);
+
+    true
+}
+
+// a = a - b;
+// のような減算をアセンブリに変換する
+// 処理できた場合は true を返す
+// 処理できない場合は false を返す
+fn compile_sub_expression(
+    line: &str,
+    variables: &HashMap<String, u8>,
+    assembly: &mut String,
+) -> bool {
+    if !(line.contains("=") && line.contains("-")) {
+        return false;
+    }
+
+    let line_without_semicolon = line.trim_end_matches(";");
+
+    let parts: Vec<&str> = line_without_semicolon.split("=").collect();
+
+    if parts.len() != 2 {
+        panic!("Invalid sub expression: {}", line);
+    }
+
+    let dst_name = parts[0].trim();
+
+    let right_side = parts[1].trim();
+    let sub_parts: Vec<&str> = right_side.split("-").collect();
+
+    if sub_parts.len() != 2 {
+        panic!("Invalid sub expression: {}", line);
+    }
+
+    let left_name = sub_parts[0].trim();
+    let src_name = sub_parts[1].trim();
+
+    if dst_name != left_name {
+        panic!("Only a = a - b style is supported: {}", line);
+    }
+
+    let dst = get_register(variables, dst_name);
+    let src = get_register(variables, src_name);
+
+    assembly.push_str(&format!("SUB R{}, R{}\n", dst, src));
+
+    println!("generate assembly: SUB R{}, R{}", dst, src);
+
+    true
+}
+
+// move b, a;
+// のようなコピー処理をアセンブリに変換する
+// 処理できた場合は true を返す
+// 処理できない場合は false を返す
+fn compile_move_statement(
+    line: &str,
+    variables: &HashMap<String, u8>,
+    assembly: &mut String,
+) -> bool {
+    if !line.starts_with("move ") {
+        return false;
+    }
+
+    let line_without_semicolon = line
+        .trim_start_matches("move ")
+        .trim_end_matches(";")
+        .trim();
+
+    let parts: Vec<&str> = line_without_semicolon.split(",").collect();
+
+    if parts.len() != 2 {
+        panic!("Invalid move statement: {}", line);
+    }
+
+    let dst_name = parts[0].trim();
+    let src_name = parts[1].trim();
+
+    let dst = get_register(variables, dst_name);
+    let src = get_register(variables, src_name);
+
+    assembly.push_str(&format!("MOV R{}, R{}\n", dst, src));
+
+    println!("generate assembly: MOV R{}, R{}", dst, src);
+
+    true
+}
+
+// compare a, b;
+// のような比較文を CMP に変換する
+// 処理できた場合は true を返す
+// 処理できない場合は false を返す
+fn compile_compare_statement(
+    line: &str,
+    variables: &HashMap<String, u8>,
+    assembly: &mut String,
+) -> bool {
+    if !line.starts_with("compare ") {
+        return false;
+    }
+
+    let line_without_semicolon = line
+        .trim_start_matches("compare ")
+        .trim_end_matches(";")
+        .trim();
+
+    let parts: Vec<&str> = line_without_semicolon.split(",").collect();
+
+    if parts.len() != 2 {
+        panic!("Invalid compare statement: {}", line);
+    }
+
+    let left_name = parts[0].trim();
+    let right_name = parts[1].trim();
+
+    let left = get_register(variables, left_name);
+    let right = get_register(variables, right_name);
+
+    assembly.push_str(&format!("CMP R{}, R{}\n", left, right));
+
+    println!("generate assembly: CMP R{}, R{}", left, right);
+
+    true
+}
+
+// load a, 400;
+// のような読み込み処理をアセンブリに変換する
+// 処理できた場合は true を返す
+// 処理できない場合は false を返す
+fn compile_load_statement(
+    line: &str,
+    variables: &HashMap<String, u8>,
+    assembly: &mut String,
+) -> bool {
+    if !line.starts_with("load ") {
+        return false;
+    }
+
+    let line_without_semicolon = line
+        .trim_start_matches("load ")
+        .trim_end_matches(";")
+        .trim();
+
+    let parts: Vec<&str> = line_without_semicolon.split(",").collect();
+
+    if parts.len() != 2 {
+        panic!("Invalid load statement: {}", line);
+    }
+
+    let name = parts[0].trim();
+
+    let address: u32 = parts[1]
+        .trim()
+        .parse()
+        .expect("Invalid address");
+
+    let reg = get_register(variables, name);
+
+    assembly.push_str(&format!("LOAD R{}, {}\n", reg, address));
+
+    println!("generate assembly: LOAD R{}, {}", reg, address);
+
+    true
+}
+
+// push a;
+// のようなスタック保存処理をアセンブリに変換する
+// 処理できた場合は true を返す
+// 処理できない場合は false を返す
+fn compile_push_statement(
+    line: &str,
+    variables: &HashMap<String, u8>,
+    assembly: &mut String,
+) -> bool {
+    if !line.starts_with("push ") {
+        return false;
+    }
+
+    let name = line
+        .trim_start_matches("push ")
+        .trim_end_matches(";")
+        .trim();
+
+    let reg = get_register(variables, name);
+
+    assembly.push_str(&format!("PUSH R{}\n", reg));
+
+    println!("generate assembly: PUSH R{}", reg);
+
+    true
+}
+
+// pop b;
+// のようなスタック復元処理をアセンブリに変換する
+// 処理できた場合は true を返す
+// 処理できない場合は false を返す
+fn compile_pop_statement(
+    line: &str,
+    variables: &HashMap<String, u8>,
+    assembly: &mut String,
+) -> bool {
+    if !line.starts_with("pop ") {
+        return false;
+    }
+
+    let name = line
+        .trim_start_matches("pop ")
+        .trim_end_matches(";")
+        .trim();
+
+    let reg = get_register(variables, name);
+
+    assembly.push_str(&format!("POP R{}\n", reg));
+
+    println!("generate assembly: POP R{}", reg);
+
+    true
+}
+
+// store a, 400;
+// のような保存処理をアセンブリに変換する
+// 処理できた場合は true を返す
+// 処理できない場合は false を返す
+fn compile_store_statement(
+    line: &str,
+    variables: &HashMap<String, u8>,
+    assembly: &mut String,
+) -> bool {
+    if !line.starts_with("store ") {
+        return false;
+    }
+
+    let line_without_semicolon = line
+        .trim_start_matches("store ")
+        .trim_end_matches(";")
+        .trim();
+
+    let parts: Vec<&str> = line_without_semicolon.split(",").collect();
+
+    if parts.len() != 2 {
+        panic!("Invalid store statement: {}", line);
+    }
+
+    let name = parts[0].trim();
+
+    let address: u32 = parts[1]
+        .trim()
+        .parse()
+        .expect("Invalid address");
+
+    let reg = get_register(variables, name);
+
+    assembly.push_str(&format!("STORE R{}, {}\n", reg, address));
+
+    println!("generate assembly: STORE R{}, {}", reg, address);
+
+    true
+}
+
 // a = 3; のような代入
 fn assign_number(
     memory: &mut Memory,
@@ -262,7 +859,7 @@ pub fn compile_to_assembly(source: &str) -> String {
     let mut variables: HashMap<String, u8> = HashMap::new();
 
     for line in source.lines() {
-        let line = line.trim();
+        let line = preprocess_line(line);
 
         if line.is_empty() {
             continue;
@@ -270,246 +867,137 @@ pub fn compile_to_assembly(source: &str) -> String {
 
         println!("compile to assembly line: {}", line);
 
-        // int a;
-        // int b;
-        // のような変数宣言を処理する
-        if line.starts_with("int ") {
-            let name = line
-                .trim_start_matches("int ")
-                .trim_end_matches(";")
-                .trim();
-
-            declare_variable(&mut variables, name);
-
-            let reg = get_register(&variables, name);
-
-            println!("declare variable for assembly: {} -> R{}", name, reg);
-
+        // 変数宣言の変換を関数化
+        if compile_variable_declaration(&line, &mut variables) {
             continue;
         }
 
-        // a = 3;
-        // b = 1;
-        // のような数値代入を処理する
-        if line.contains("=") && !line.contains("+") && !line.contains("-") {
-            let line_without_semicolon = line.trim_end_matches(";");
-
-            let parts: Vec<&str> = line_without_semicolon.split("=").collect();
-
-            if parts.len() != 2 {
-                panic!("Invalid assignment: {}", line);
-            }
-
-            let name = parts[0].trim();
-
-            let value: u32 = parts[1]
-                .trim()
-                .parse()
-                .expect("Invalid number");
-
-            let reg = get_register(&variables, name);
-
-            assembly.push_str(&format!("LOADI R{}, {}\n", reg, value));
-
-            println!("generate assembly: LOADI R{}, {}", reg, value);
-
+        // LABEL処理の変換を関数化
+        if compile_label_statement(&line, &mut assembly) {
             continue;
         }
 
-        // a = a + b;
-        // のような加算を処理する
-        if line.contains("=") && line.contains("+") {
-            let line_without_semicolon = line.trim_end_matches(";");
-
-            let parts: Vec<&str> = line_without_semicolon.split("=").collect();
-
-            if parts.len() != 2 {
-                panic!("Invalid add expression: {}", line);
-            }
-
-            let dst_name = parts[0].trim();
-
-            let right_side = parts[1].trim();
-            let add_parts: Vec<&str> = right_side.split("+").collect();
-
-            if add_parts.len() != 2 {
-                panic!("Invalid add expression: {}", line);
-            }
-
-            let left_name = add_parts[0].trim();
-            let src_name = add_parts[1].trim();
-
-            if dst_name != left_name {
-                panic!("Only a = a + b style is supported: {}", line);
-            }
-
-            let dst = get_register(&variables, dst_name);
-            let src = get_register(&variables, src_name);
-
-            assembly.push_str(&format!("ADD R{}, R{}\n", dst, src));
-
-            println!("generate assembly: ADD R{}, R{}", dst, src);
-
+        // JMP処理の変換を関数化
+        if compile_jump_statement(&line, &mut assembly) {
             continue;
         }
 
-        // a = a - b;
-        // のような減算を処理する
-        if line.contains("=") && line.contains("-") {
-            let line_without_semicolon = line.trim_end_matches(";");
-
-            let parts: Vec<&str> = line_without_semicolon.split("=").collect();
-
-            if parts.len() != 2 {
-                panic!("Invalid sub expression: {}", line);
-            }
-
-            let dst_name = parts[0].trim();
-
-            let right_side = parts[1].trim();
-            let sub_parts: Vec<&str> = right_side.split("-").collect();
-
-            if sub_parts.len() != 2 {
-                panic!("Invalid sub expression: {}", line);
-            }
-
-            let left_name = sub_parts[0].trim();
-            let src_name = sub_parts[1].trim();
-
-            if dst_name != left_name {
-                panic!("Only a = a - b style is supported: {}", line);
-            }
-
-            let dst = get_register(&variables, dst_name);
-            let src = get_register(&variables, src_name);
-
-            assembly.push_str(&format!("SUB R{}, R{}\n", dst, src));
-
-            println!("generate assembly: SUB R{}, R{}", dst, src);
-
+        // JZ処理の変換を関数化
+        if compile_conditional_jump_statement(&line, "jz", "JZ", &mut assembly) {
             continue;
         }
 
-        // move b, a;
-        // のようなコピー処理をアセンブリに変換する
-        if line.starts_with("move ") {
-            let line_without_semicolon = line
-                .trim_start_matches("move ")
-                .trim_end_matches(";")
-                .trim();
-
-            let parts: Vec<&str> = line_without_semicolon.split(",").collect();
-
-            if parts.len() != 2 {
-                panic!("Invalid move statement: {}", line);
-            }
-
-            let dst_name = parts[0].trim();
-            let src_name = parts[1].trim();
-
-            let dst = get_register(&variables, dst_name);
-            let src = get_register(&variables, src_name);
-
-            assembly.push_str(&format!("MOV R{}, R{}\n", dst, src));
-
-            println!("generate assembly: MOV R{}, R{}", dst, src);
-
+        // IFZ処理の変換
+        if compile_ifz_statement(&line, &mut assembly) {
             continue;
         }
 
-        // load a, 400;
-        // のような読み込み処理をアセンブリに変換する
-        if line.starts_with("load ") {
-            let line_without_semicolon = line
-                .trim_start_matches("load ")
-                .trim_end_matches(";")
-                .trim();
-
-            let parts: Vec<&str> = line_without_semicolon.split(",").collect();
-
-            if parts.len() != 2 {
-                panic!("Invalid load statement: {}", line);
-            }
-
-            let name = parts[0].trim();
-
-            let address: u32 = parts[1]
-                .trim()
-                .parse()
-                .expect("Invalid address");
-
-            let reg = get_register(&variables, name);
-
-            assembly.push_str(&format!("LOAD R{}, {}\n", reg, address));
-
-            println!("generate assembly: LOAD R{}, {}", reg, address);
-
+        // JNZ処理の変換を関数化
+        if compile_conditional_jump_statement(&line, "jnz", "JNZ", &mut assembly) {
             continue;
         }
 
-        // push a;
-        // のようなスタック保存処理をアセンブリに変換する
-        if line.starts_with("push ") {
-            let name = line
-                .trim_start_matches("push ")
-                .trim_end_matches(";")
-                .trim();
-
-            let reg = get_register(&variables, name);
-
-            assembly.push_str(&format!("PUSH R{}\n", reg));
-
-            println!("generate assembly: PUSH R{}", reg);
-
+        // IFNZ処理の変換
+        if compile_ifnz_statement(&line, &mut assembly) {
             continue;
         }
 
-        // pop b;
-        // のようなスタック復元処理をアセンブリに変換する
-        if line.starts_with("pop ") {
-            let name = line
-                .trim_start_matches("pop ")
-                .trim_end_matches(";")
-                .trim();
+        // JS処理の変換を関数化
+        if compile_conditional_jump_statement(&line, "js", "JS", &mut assembly) {
+            continue;
+        }
 
-            let reg = get_register(&variables, name);
+        // IFS処理の変換
+        if compile_ifs_statement(&line, &mut assembly) {
+            continue;
+        }
 
-            assembly.push_str(&format!("POP R{}\n", reg));
+        // JNS処理の変換を関数化
+        if compile_conditional_jump_statement(&line, "jns", "JNS", &mut assembly) {
+            continue;
+        }
 
-            println!("generate assembly: POP R{}", reg);
+        // IFNS処理の変換
+        if compile_ifns_statement(&line, &mut assembly) {
+            continue;
+        }
 
+        // CALL処理の変換を関数化
+        if compile_call_statement(&line, &mut assembly) {
+            continue;
+        }
+
+        // RET処理の変換を関数化
+        if compile_no_argument_statement(&line, "ret", "RET", &mut assembly) {
+            continue;
+        }
+
+        // ENTER処理の変換を関数化
+        if compile_no_argument_statement(&line, "enter", "ENTER", &mut assembly) {
+            continue;
+        }
+
+        // LEAVE処理の変換を関数化
+        if compile_no_argument_statement(&line, "leave", "LEAVE", &mut assembly) {
+            continue;
+        }
+
+        // INT処理の変換を関数化
+        if compile_no_argument_statement(&line, "interrupt", "INT", &mut assembly) {
+            continue;
+        }
+
+        // IRET処理の変換を関数化
+        if compile_no_argument_statement(&line, "iret", "IRET", &mut assembly) {
+            continue;
+        }
+
+        // 代入処理の変換を関数化
+        if compile_number_assignment(&line, &variables, &mut assembly) {
+            continue;
+        }
+
+        // 加算処理の変換を関数化
+        if compile_add_expression(&line, &variables, &mut assembly) {
+            continue;
+        }
+
+        // 減算処理の変換を関数化
+        if compile_sub_expression(&line, &variables, &mut assembly) {
+            continue;
+        }
+
+        // MOV処理の変換を関数化
+        if compile_move_statement(&line, &variables, &mut assembly) {
+            continue;
+        }
+
+        // compare処理の変換
+        if compile_compare_statement(&line, &variables, &mut assembly) {
+            continue;
+        }
+
+        // LOAD処理の変換を関数化
+        if compile_load_statement(&line, &variables, &mut assembly) {
+            continue;
+        }
+
+        // PUSH処理の変換を関数化
+        if compile_push_statement(&line, &variables, &mut assembly) {
+            continue;
+        }
+
+        // POP処理の変換を関数化
+        if compile_pop_statement(&line, &variables, &mut assembly) {
             continue;
         }
         
-        // store a, 400;
-        // のような保存処理をアセンブリに変換する
-        if line.starts_with("store ") {
-            let line_without_semicolon = line
-                .trim_start_matches("store ")
-                .trim_end_matches(";")
-                .trim();
-
-            let parts: Vec<&str> = line_without_semicolon.split(",").collect();
-
-            if parts.len() != 2 {
-                panic!("Invalid store statement: {}", line);
-            }
-
-            let name = parts[0].trim();
-
-            let address: u32 = parts[1]
-                .trim()
-                .parse()
-                .expect("Invalid address");
-
-            let reg = get_register(&variables, name);
-
-            assembly.push_str(&format!("STORE R{}, {}\n", reg, address));
-
-            println!("generate assembly: STORE R{}, {}", reg, address);
-
+        // STORE処理の変換を関数化
+        if compile_store_statement(&line, &variables, &mut assembly) {
             continue;
         }
+
+        panic!("Unsupported statement: {}", line);
     }
 
     assembly.push_str("HLT\n");

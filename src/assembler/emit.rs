@@ -1,7 +1,35 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use crate::emulator::cpu::{LOAD, LOADI, STORE, ADD, SUB, MOV, JMP, JZ, JNZ, JS, JNS, PUSH, POP, CALL, RET, INT, IRET, ENTER, LEAVE, HLT};
+use crate::emulator::cpu::{
+    LOAD, 
+    LOADI, 
+    STORE, 
+    ADD, 
+    SUB, 
+    MOV, 
+    JMP, 
+    JZ, 
+    JNZ, 
+    JS, 
+    JNS,
+    PUSH, 
+    POP, 
+    CALL, 
+    RET, 
+    INT, 
+    IRET, 
+    ENTER, 
+    LEAVE, 
+    CMP, 
+    MUL, 
+    DIV, 
+    AND,
+    OR,
+    XOR,
+    HLT,
+};
+
 use crate::emulator::memory::Memory;
 
 // LOAD Rn, address
@@ -55,6 +83,108 @@ pub fn emit_add(memory: &mut Memory, pos: &mut u32, dst: u8, src: u8) {
 // SUB dst, src
 pub fn emit_sub(memory: &mut Memory, pos: &mut u32, dst: u8, src: u8) {
     memory.write_u8(*pos, SUB);
+    *pos += 1;
+
+    memory.write_u8(*pos, dst);
+    *pos += 1;
+
+    memory.write_u8(*pos, src);
+    *pos += 1;
+}
+
+// MUL dst, src
+pub fn emit_mul(
+    memory: &mut Memory,
+    pos: &mut u32,
+    dst: u8,
+    src: u8,
+) {
+    memory.write_u8(*pos, MUL);
+    *pos += 1;
+
+    memory.write_u8(*pos, dst);
+    *pos += 1;
+
+    memory.write_u8(*pos, src);
+    *pos += 1;
+}
+
+// DIV dst, src
+pub fn emit_div(
+    memory: &mut Memory,
+    pos: &mut u32,
+    dst: u8,
+    src: u8,
+) {
+    memory.write_u8(*pos, DIV);
+    *pos += 1;
+
+    memory.write_u8(*pos, dst);
+    *pos += 1;
+
+    memory.write_u8(*pos, src);
+    *pos += 1;
+}
+
+// CMP dst, src
+pub fn emit_cmp(
+    memory: &mut Memory,
+    pos: &mut u32,
+    left: u8,
+    right: u8,
+) {
+    memory.write_u8(*pos, CMP);
+    *pos += 1;
+
+    memory.write_u8(*pos, left);
+    *pos += 1;
+
+    memory.write_u8(*pos, right);
+    *pos += 1;
+}
+
+// AND dst, src
+pub fn emit_and(
+    memory: &mut Memory,
+    pos: &mut u32,
+    dst: u8,
+    src: u8,
+) {
+    memory.write_u8(*pos, AND);
+    *pos += 1;
+
+    memory.write_u8(*pos, dst);
+    *pos += 1;
+
+    memory.write_u8(*pos, src);
+    *pos += 1;
+}
+
+// OR dst, src
+pub fn emit_or(
+    memory: &mut Memory,
+    pos: &mut u32,
+    dst: u8,
+    src: u8,
+) {
+    memory.write_u8(*pos, OR);
+    *pos += 1;
+
+    memory.write_u8(*pos, dst);
+    *pos += 1;
+
+    memory.write_u8(*pos, src);
+    *pos += 1;
+}
+
+// XOR dst, src
+pub fn emit_xor(
+    memory: &mut Memory,
+    pos: &mut u32,
+    dst: u8,
+    src: u8,
+) {
+    memory.write_u8(*pos, XOR);
     *pos += 1;
 
     memory.write_u8(*pos, dst);
@@ -390,6 +520,71 @@ pub fn assemble_source(
                 let src = parse_register(operands[1]);
 
                 emit_sub(memory, pos, dst, src);
+            }
+
+            "MUL" => {
+                if operands.len() != 2 {
+                    panic!("MUL requires 2 arguments");
+                }
+
+                let dst = parse_register(operands[0]);
+                let src = parse_register(operands[1]);
+
+                emit_mul(memory, pos, dst, src);
+            }
+
+            "DIV" => {
+                if operands.len() != 2 {
+                    panic!("DIV requires 2 arguments");
+                }
+
+                let dst = parse_register(operands[0]);
+                let src = parse_register(operands[1]);
+
+                emit_div(memory, pos, dst, src);
+            }
+
+            "CMP" => {
+                if operands.len() != 2 {
+                    panic!("CMP requires 2 arguments");
+                }
+
+                let left = parse_register(operands[0]);
+                let right = parse_register(operands[1]);
+
+                emit_cmp(memory, pos, left, right);
+            }
+            "AND" => {
+                if operands.len() != 2 {
+                    panic!("Invalid AND format: {}", line);
+                }
+
+                let dst = parse_register(operands[0]);
+                let src = parse_register(operands[1]);
+
+                emit_and(memory, pos, dst, src);
+            }
+
+            "OR" => {
+                if operands.len() != 2 {
+                    panic!("Invalid OR format: {}", line);
+                }
+
+                let dst = parse_register(operands[0]);
+                let src = parse_register(operands[1]);
+
+                emit_or(memory, pos, dst, src);
+            }
+
+            "XOR" => {
+                if operands.len() != 2 {
+                    panic!("Invalid XOR format: {}", line);
+                }
+
+                let dst = parse_register(operands[0]);
+                let src = parse_register(operands[1]);
+
+                emit_xor(memory, pos, dst, src);
             }
 
             "MOV" => {

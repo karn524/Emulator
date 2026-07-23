@@ -20,6 +20,12 @@ pub const INT: u8 = 16;    // 割り込み処理へ移動する
 pub const IRET: u8 = 17;   // 割り込み処理から戻る
 pub const ENTER: u8 = 18;  // 
 pub const LEAVE: u8 = 19;  //
+pub const CMP: u8 = 20;    //
+pub const MUL: u8 = 21;    //
+pub const DIV: u8 = 22;    //
+pub const AND: u8 = 23;    //
+pub const OR: u8 = 24;     //
+pub const XOR: u8 = 25;    //
 pub const HLT: u8 = 255;   // 停止
 
 pub struct CPU {
@@ -261,6 +267,147 @@ impl CPU {
                 self.update_zero_sign_flags(self.registers[dst_index]);
 
                 // overflow_flag は Phase 12 で実装予定
+            }
+
+            MUL => {
+                let dst = self.fetch_u8(memory);
+                let src = self.fetch_u8(memory);
+
+                let dst_index = CPU::check_register(dst);
+                let src_index = CPU::check_register(src);
+
+                let a = self.registers[dst_index];
+                let b = self.registers[src_index];
+
+                let result = a.wrapping_mul(b);
+
+                self.registers[dst_index] = result;
+
+                // Phase 18では、MULのCF / OFは簡易的にfalseにする
+                self.carry_flag = false;
+                self.overflow_flag = false;
+
+                // ZF / SF を更新する
+                self.update_zero_sign_flags(self.registers[dst_index]);
+            }
+
+            DIV => {
+                let dst = self.fetch_u8(memory);
+                let src = self.fetch_u8(memory);
+
+                let dst_index = CPU::check_register(dst);
+                let src_index = CPU::check_register(src);
+
+                let a = self.registers[dst_index];
+                let b = self.registers[src_index];
+
+                if b == 0 {
+                    panic!("Division by zero");
+                }
+
+                let result = a / b;
+
+                self.registers[dst_index] = result;
+
+                // Phase 18では、DIVのCF / OFは簡易的にfalseにする
+                self.carry_flag = false;
+                self.overflow_flag = false;
+
+                // ZF / SF を更新する
+                self.update_zero_sign_flags(self.registers[dst_index]);
+            }
+
+            CMP => {
+                let dst = self.fetch_u8(memory);
+                let src = self.fetch_u8(memory);
+
+                let dst_index = CPU::check_register(dst);
+                let src_index = CPU::check_register(src);
+
+                let a = self.registers[dst_index];
+                let b = self.registers[src_index];
+
+                let result = a.wrapping_sub(b);
+
+                // CF：符号なし整数として借りが発生したか
+                self.carry_flag = a < b;
+
+                // OF：符号付き整数としてオーバーフローしたか
+                let sign_a = (a & 0x8000_0000) != 0;
+                let sign_b = (b & 0x8000_0000) != 0;
+                let sign_result = (result & 0x8000_0000) != 0;
+
+                self.overflow_flag = (sign_a != sign_b) && (sign_a != sign_result);
+
+                // ZF / SF を更新する
+                // ただし、レジスタの値は変更しない
+                self.update_zero_sign_flags(result);
+            }
+
+            AND => {
+                let dst = self.fetch_u8(memory);
+                let src = self.fetch_u8(memory);
+
+                let dst_index = CPU::check_register(dst);
+                let src_index = CPU::check_register(src);
+
+                let a = self.registers[dst_index];
+                let b = self.registers[src_index];
+
+                let result = a & b;
+
+                self.registers[dst_index] = result;
+
+                // ビット演算では CF / OF は使わないので false にする
+                self.carry_flag = false;
+                self.overflow_flag = false;
+
+                // ZF / SF を更新する
+                self.update_zero_sign_flags(self.registers[dst_index]);
+            }
+
+            OR => {
+                let dst = self.fetch_u8(memory);
+                let src = self.fetch_u8(memory);
+
+                let dst_index = CPU::check_register(dst);
+                let src_index = CPU::check_register(src);
+
+                let a = self.registers[dst_index];
+                let b = self.registers[src_index];
+
+                let result = a | b;
+
+                self.registers[dst_index] = result;
+
+                // ビット演算では CF / OF は使わないので false にする
+                self.carry_flag = false;
+                self.overflow_flag = false;
+
+                // ZF / SF を更新する
+                self.update_zero_sign_flags(self.registers[dst_index]);
+            }
+
+            XOR => {
+                let dst = self.fetch_u8(memory);
+                let src = self.fetch_u8(memory);
+
+                let dst_index = CPU::check_register(dst);
+                let src_index = CPU::check_register(src);
+
+                let a = self.registers[dst_index];
+                let b = self.registers[src_index];
+
+                let result = a ^ b;
+
+                self.registers[dst_index] = result;
+
+                // ビット演算では CF / OF は使わないので false にする
+                self.carry_flag = false;
+                self.overflow_flag = false;
+
+                // ZF / SF を更新する
+                self.update_zero_sign_flags(self.registers[dst_index]);
             }
 
             JMP => {

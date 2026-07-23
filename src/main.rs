@@ -13,6 +13,12 @@ use assembler::emit::{
     emit_mov,
     emit_add,
     emit_sub,
+    emit_cmp,
+    emit_mul,
+    emit_div,
+    emit_and,
+    emit_or,
+    emit_xor,
     emit_store,
     emit_jz_label,
     emit_jmp_label,
@@ -40,22 +46,30 @@ fn main() {
 
     // true  → C風コンパイラのテスト
     // false → CPU命令テスト
-    let use_compiler_test = true;
+    let use_compiler_test = false;
     let use_assembler_text_test = false;
 
     if use_compiler_test {
         let source_c = "
-        int a;
-        int b;
+int a;
+int b;
+int c;
 
-        a = 123;
-        push a;
+a = 5;
+b = 5;
 
-        a = 0;
-        pop b;
+compare a, b;
+ifz equal;
 
-        store b, 400;
-        ";
+c = 999;
+jump end;
+
+label equal;
+c = 123;
+
+label end;
+store c, 400;
+";
 
         let asm_source = compiler::simple_c::compile_to_assembly(source_c);
 
@@ -73,26 +87,35 @@ fn main() {
             &mut patches,
         );
 
+        let use_interrupt_test = false;
+
+        if use_interrupt_test {
+            let handler_address = labels.get("handler");
+            cpu.interrupt_register = handler_address;
+        }
+
         resolve_patches(&mut memory, &labels, &patches);
     } else if use_assembler_text_test {
-            let source = "
-            CALL func
-            LOADI R7, 777
-            HLT
+            let source_asm = "
+LOADI R0, 12
+LOADI R1, 10
+AND R0, R1
+STORE R0, 400
+HLT
+";
 
-            func:
-            ENTER
-            LOADI R0, 123
-            LEAVE
-            RET
-            ";
+            let asm_source = source_asm;
+
+            println!("generated assembly:");
+            println!("{}", asm_source);
+
             let mut labels = LabelTable::new();
             let mut patches: Vec<Patch> = Vec::new();
 
             assemble_source(
                 &mut memory,
                 &mut pos,
-                source,
+                &asm_source,
                 &mut labels,
                 &mut patches,
             );
@@ -101,20 +124,72 @@ fn main() {
     } else {
         
         let use_carry_test = false;
-
-        let use_normal_cpu_test = false;
+        let use_cmp_test = false;
+        let use_mul_test = false;
+        let use_mul_store_test = false;
+        let use_div_test = false;
+        let use_div_store_test = false;
+        let use_and_test = false;
+        let use_or_test = true;
+        let use_xor_test = false;
+        let use_normal_cpu_test = false;   
 
         if use_carry_test {
             // Phase 12.5：SUB の OF テスト
-            // 2147483647 - 4294967295
-            // 符号付き整数としては 2147483647 - (-1)
-            // 正 - 負 = 負 になるので OF = true
-
             emit_loadi(&mut memory, &mut pos, 0, 2_147_483_647);
             emit_loadi(&mut memory, &mut pos, 1, 4_294_967_295);
-
             emit_sub(&mut memory, &mut pos, 0, 1);
+            emit_hlt(&mut memory, &mut pos);
+        }
 
+        if use_cmp_test {
+            // Phase 17：CMP テスト
+            emit_loadi(&mut memory, &mut pos, 0, 5);
+            emit_loadi(&mut memory, &mut pos, 1, 5);
+            emit_cmp(&mut memory, &mut pos, 0, 1);
+            emit_hlt(&mut memory, &mut pos);
+        }
+
+        if use_mul_test {
+            // Phase 18.7：MUL 直接テスト
+            emit_loadi(&mut memory, &mut pos, 0, 6);
+            emit_loadi(&mut memory, &mut pos, 1, 3);
+            emit_mul(&mut memory, &mut pos, 0, 1);
+            emit_hlt(&mut memory, &mut pos);
+        }
+
+        if use_mul_store_test {
+            // Phase 18.9：MUL + STORE テスト
+            emit_loadi(&mut memory, &mut pos, 0, 6);
+            emit_loadi(&mut memory, &mut pos, 1, 3);
+            emit_mul(&mut memory, &mut pos, 0, 1);
+            emit_store(&mut memory, &mut pos, 0, 400);
+            emit_hlt(&mut memory, &mut pos);
+        }
+
+        if use_div_test {
+            // Phase 18.8：DIV 直接テスト
+            emit_loadi(&mut memory, &mut pos, 0, 12);
+            emit_loadi(&mut memory, &mut pos, 1, 3);
+            emit_div(&mut memory, &mut pos, 0, 1);
+            emit_hlt(&mut memory, &mut pos);
+        }
+
+        if use_div_store_test {
+            // Phase 18.9：DIV + STORE テスト
+            emit_loadi(&mut memory, &mut pos, 0, 12);
+            emit_loadi(&mut memory, &mut pos, 1, 3);
+            emit_div(&mut memory, &mut pos, 0, 1);
+            emit_store(&mut memory, &mut pos, 0, 400);
+            emit_hlt(&mut memory, &mut pos);
+        }
+
+        if use_and_test {
+            // Phase 19.8：AND 直接テスト
+            emit_loadi(&mut memory, &mut pos, 0, 12);
+            emit_loadi(&mut memory, &mut pos, 1, 10);
+            emit_and(&mut memory, &mut pos, 0, 1);
+            emit_store(&mut memory, &mut pos, 0, 400);
             emit_hlt(&mut memory, &mut pos);
         }
 
